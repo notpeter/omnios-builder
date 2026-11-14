@@ -1,5 +1,8 @@
 name: Publish experimental arm64
 on:
+  push:
+    branches: [illumos_aarch64]
+    paths: ['.github/workflows/publish-arm64.yml']
   workflow_dispatch:
     inputs:
       builder_run_id:
@@ -14,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.ref == 'refs/heads/illumos_aarch64'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/illumos_aarch64'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
