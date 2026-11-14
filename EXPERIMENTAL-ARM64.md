@@ -19,8 +19,17 @@ python3 build.py conf/omnios-r151059-aarch64.conf
 
 Like the existing x86 builder, this command installs host packages and prepares
 SSH configuration. Do not run it directly on a shared development host. The
-`Experimental arm64` workflow provides an isolated hosted build. It publishes
-short-lived workflow artifacts, not a stable release.
+`Experimental arm64` workflow provides an isolated hosted build and produces
+short-lived workflow artifacts. `Publish experimental arm64` accepts a successful
+build run ID and publishes its image as the separate `v2.1.4-aarch64.1` prerelease,
+without changing the latest stable release or the default branch. It uses the
+repository's `GITHUB_TOKEN` so release events do not start the general x86 build
+or README-update workflows.
+
+The image follows the existing builder's public test-key contract: the
+`-host.id_rsa` sidecar is generated on the disposable build runner and grants
+root access to this CI image. It is deliberately distributed with the image;
+do not treat it as a secret credential or use this image as a production host.
 
 Boot requirements:
 
@@ -60,4 +69,9 @@ arm64 guest and cannot launch this image correctly.
 - The [first hosted image build](https://github.com/notpeter/omnios-builder/actions/runs/43635960060)
   passed. Its image also booted with the patched runtime locally; SSH, rsync in
   both directions and clean shutdown passed.
-- The final hosted rebuild and end-to-end action validation are in progress.
+- The [final hosted rebuild](https://github.com/notpeter/omnios-builder/actions/runs/43638634261)
+  and [action validation](https://github.com/notpeter/omnios-vm/actions/runs/43638616277)
+  passed. The action compiled and ran native C, forwarded environment variables,
+  synchronized files in both directions, and exercised its persistent shell
+  wrapper on both `ubuntu-24.04` (QEMU 8.2.2) and `ubuntu-26.04-arm` (QEMU 10.2.1).
+  The separate r151060 x86 regression test also passed.
