@@ -1,0 +1,67 @@
+name: Publish experimental arm64
+on:
+  workflow_dispatch:
+    inputs:
+      builder_run_id:
+        description: Successful Experimental arm64 build run to publish
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publish-experimental-arm64
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/illumos_aarch64'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN: ${{ inputs.builder_run_id }}
+      RELEASE_TAG: v2.1.4-aarch64.1
+    steps:
+      - name: Verify build provenance
+        id: build
+        run: |
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN" > run.json
+          jq -e '.conclusion == "success" and .head_branch == "illumos_aarch64" and .path == ".github/workflows/arm64.yml"' run.json
+          echo "sha=$(jq -r .head_sha run.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ inputs.builder_run_id }}
+          github-token: ${{ github.token }}
+          name: omnios-r151059-aarch64
+          path: image
+      - name: Validate and publish prerelease
+        env:
+          BUILD_SHA: ${{ steps.build.outputs.sha }}
+        run: |
+          cd image
+          assets=(omnios-r151059-aarch64.qcow2.zst
+                  omnios-r151059-aarch64.profile.json
+                  omnios-r151059-aarch64.qemu
+                  omnios-r151059-aarch64-id_rsa.pub
+                  omnios-r151059-aarch64-host.id_rsa
+                  omnios-aarch64-u-boot.bin)
+          for asset in "${assets[@]}"; do test -s "$asset"; done
+          zstd --test omnios-r151059-aarch64.qcow2.zst
+          echo '3aa554094ffe1d86d7f9637e548d07df804f5034c32ac3da542ee8da6e2e783e  omnios-aarch64-u-boot.bin' | sha256sum --check
+          sha256sum "${assets[@]}" > SHA256SUMS
+          printf '%s\n' \
+            'Experimental OmniOS braich r151059 for aarch64. Not a stable or LTS release.' \
+            '' \
+            "Built from $BUILD_SHA: https://github.com/$GH_REPO/actions/runs/$BUILD_RUN" \
+            '' \
+            'Requires the illumos_aarch64 branch of notpeter/omnios-vm and explicit release: r151059, arch: aarch64.' \
+            'The package repository is rolling bloody/braich. Use only as a disposable CI guest.' \
+            > ../release-notes.md
+          # GITHUB_TOKEN deliberately prevents release events from triggering
+          # the general x86 build and README workflows on the default branch.
+          gh release create "$RELEASE_TAG" --target "$BUILD_SHA" --draft \
+            --prerelease --latest=false --title 'Experimental OmniOS arm64 r151059' \
+            --notes-file ../release-notes.md "${assets[@]}" SHA256SUMS
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
