@@ -54,4 +54,10 @@ arm64 guest and cannot launch this image correctly.
   compiled and ran the native C smoke test. The output was an ELF64 aarch64
   executable. SCP, rsync and tar round trips passed, including symlinks, executable
   permissions and filenames with spaces.
-- Full isolated local image build and hosted end-to-end validation are in progress.
+- Full isolated local image build completed successfully, including provisioning,
+  restart, package installation, shutdown and export. `qemu-img check` reported
+  zero errors and `zstd --test` passed for the exported artifact.
+- The [first hosted image build](https://github.com/notpeter/omnios-builder/actions/runs/43635960060)
+  passed. Its image also booted with the patched runtime locally; SSH, rsync in
+  both directions and clean shutdown passed.
+- The final hosted rebuild and end-to-end action validation are in progress.
