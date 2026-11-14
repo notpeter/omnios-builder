@@ -70,8 +70,12 @@ arm64 guest and cannot launch this image correctly.
   passed. Its image also booted with the patched runtime locally; SSH, rsync in
   both directions and clean shutdown passed.
 - The [final hosted rebuild](https://github.com/notpeter/omnios-builder/actions/runs/43638634261)
-  and [action validation](https://github.com/notpeter/omnios-vm/actions/runs/43638616277)
+  and [published-image action validation](https://github.com/notpeter/omnios-vm/actions/runs/43641173749)
   passed. The action compiled and ran native C, forwarded environment variables,
   synchronized files in both directions, and exercised its persistent shell
   wrapper on both `ubuntu-24.04` (QEMU 8.2.2) and `ubuntu-26.04-arm` (QEMU 10.2.1).
   The separate r151060 x86 regression test also passed.
+- [Prerelease publication](https://github.com/notpeter/omnios-builder/actions/runs/43640645287)
+  passed. Every published checksum matched the final build artifact. The
+  published image and firmware also passed a fresh local runtime download,
+  boot, SSH, DNS, bidirectional rsync and clean shutdown.
