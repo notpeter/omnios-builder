@@ -404,6 +404,10 @@ def detect_guest_ip(osname=None):
 # (C) QEMU command construction (was vbox.py:build_qemu_args)
 # ============================================================================
 
+def is_braich():
+    return env("VM_OS_NAME") == "omnios" and env("VM_ARCH") == "aarch64"
+
+
 def qemu_bin_name():
     a = env("VM_ARCH") or "x86_64"
     if a == "aarch64": return "qemu-system-aarch64"
@@ -1072,7 +1076,7 @@ def build_qemu_args(media_kind=None, media_path=None):
     # armv7 (raspi2b) is excluded for a blunter reason than the others: the
     # Raspberry Pi has no PCI bus at all, so QEMU aborts at launch rather than
     # merely confusing the guest.
-    if (osname not in ("solaris", "reactos")
+    if (not is_braich() and osname not in ("solaris", "reactos")
             and arch not in ("sparc64", "s390x", "armv7")):
         a += ["-object", "rng-builtin,id=rng0",
               "-device", "virtio-rng-pci,rng=rng0,max-bytes=1024,period=1000"]
@@ -1090,7 +1094,30 @@ def build_qemu_args(media_kind=None, media_path=None):
     if env("VM_BIOS"):
         a += ["-bios", env("VM_BIOS")]
 
-    if arch == "aarch64":
+    if is_braich():
+        # The experimental image boots via U-Boot and FDT, with MMIO virtio.
+        # Keep the NIC before the disk: their device-tree addresses are ordered.
+        a += ["-machine", "virt,accel=tcg", "-cpu", "cortex-a53",
+              "-device", "virtio-net-device,netdev=net0",
+              "-device", "virtio-blk-device,drive=disk0",
+              "-drive", "file=%s,format=qcow2,if=none,id=disk0" % qcow]
+        # QEMU 8.2 has stdout-path but lacks the serial0 alias the loader
+        # discovers UARTs through. Generate from this launch's hardware/RAM.
+        dtb = wf("omnios-aarch64.dtb")
+        must_run([resolve_qemu_bin(), "-machine", "virt,dumpdtb=" + dtb,
+                  "-cpu", "cortex-a53", "-m", env("VM_MEMORY") or "6144",
+                  "-smp", env("VM_CPU") or "2", "-display", "none",
+                  "-netdev", "user,id=net0",
+                  "-device", "virtio-net-device,netdev=net0",
+                  "-device", "virtio-blk-device,drive=disk0",
+                  "-drive", "file=%s,format=qcow2,if=none,id=disk0,readonly=on" % qcow],
+                 "dump OmniOS device tree")
+        if run(["fdtget", dtb, "/aliases", "serial0"]) != 0:
+            run(["fdtput", "-c", dtb, "/aliases"])
+            must_run(["fdtput", "-t", "s", dtb, "/aliases", "serial0",
+                      "/pl011@9000000"], "set serial alias")
+        a += ["-dtb", dtb]
+    elif arch == "aarch64":
         efi = wf("%s-QEMU_EFI.fd" % osname)
         varsf = wf("%s-QEMU_EFI_VARS.fd" % osname)
         code_src = _find_aarch64_efi_code(resolve_qemu_bin())
@@ -1585,7 +1612,7 @@ def build_qemu_args(media_kind=None, media_path=None):
         a += ["-no-reboot"]
 
     # VNC display number = port - 5900 (display :N <-> TCP 5900+N).
-    a += ["-display", "vnc=127.0.0.1:%d" % (vncport - 5900)]
+    a += ["-display", "none" if is_braich() else "vnc=127.0.0.1:%d" % (vncport - 5900)]
     if not console and arch != "aarch64":
         a += ["-device", "usb-tablet"]
     return a
@@ -1623,6 +1650,8 @@ def _profile_machine():
     assembles per arch."""
     arch = env("VM_ARCH") or "x86_64"
     osname = env("VM_OS_NAME")
+    if is_braich():
+        return "virt", ""
     if arch == "aarch64":
         opts = "gic-version=3,usb=on"
         if obsd_acpi_off() or netbsd9_acpi_off():
@@ -1697,6 +1726,8 @@ def _profile_rng():
     build_qemu_args() rng gating (skipped for solaris and sparc64; CCW bus on
     s390x)."""
     arch = env("VM_ARCH") or "x86_64"
+    if is_braich():
+        return "none"
     if arch == "s390x":
         return "ccw"
     if env("VM_MICROVM"):
@@ -1778,7 +1809,7 @@ def build_guest_profile():
     # virtio over the MMIO transport there (virtio-blk-device / virtio-net-device).
     # The microvm machine has no PCI bus at all, so its runtime shape is MMIO
     # too (the BUILD still runs on pc -- see _profile_machine()).
-    mmio = (osname == "netbsd" and arch == "riscv64") or bool(env("VM_MICROVM"))
+    mmio = is_braich() or (osname == "netbsd" and arch == "riscv64") or bool(env("VM_MICROVM"))
     nic = net_card()
     if env("VM_MICROVM"):
         # The microvm machine has NO PCI bus, so the runtime NIC is always the
@@ -1808,7 +1839,9 @@ def build_guest_profile():
     # say virtio -- record the real bus here.
     dif = "ide" if arch == "sparc64" else disk_if()
     # Effective VGA device, normalized the way build_qemu_args() emits it.
-    if arch == "sparc64":
+    if is_braich():
+        vga = None
+    elif arch == "sparc64":
         vga = "none"
     elif arch in ("riscv64", "loongarch64", "s390x", "powerpc64",
                   "powerpc64le", "ppc64", "ppc64le"):
@@ -2420,7 +2453,7 @@ def setup(install_ocr=None):
                         "qemu-system-misc"], env=apt_env)
         if env("VM_ARCH") == "aarch64":
             _run_quiet(["sudo", "-E", "apt-get", "install", "-y", "-q", "--no-install-recommends",
-                        "qemu-system-arm", "qemu-efi-aarch64"], env=apt_env)
+                        "qemu-system-arm", "qemu-efi-aarch64", "device-tree-compiler"], env=apt_env)
         if env("VM_ARCH") == "s390x":
             # qemu-system-s390x ships in its own package on Ubuntu (NOT in
             # qemu-system-misc); its s390-ccw.img firmware comes with the
@@ -4126,12 +4159,14 @@ def _prep_vhd_disk(link):
                     "gunzip %s.gz (corrupt download?)" % img)
         must_run(["qemu-img", "convert", "-f", "raw", "-O", "qcow2",
                   "-o", "preallocation=off", img, qcow], "qemu-img convert")
-    elif link.endswith("img.zst"):
+    elif link.endswith(("img.zst", ".raw.zst")):
         img = wf("%s.img" % osname)
         if not os.path.exists(img):
             try: os.remove(img + ".zst")
             except OSError: pass
             download(link, img + ".zst")
+            if env("VM_IMAGE_SHA256") and _sha256_file(img + ".zst") != env("VM_IMAGE_SHA256"):
+                raise RuntimeError("Image SHA256 mismatch: " + link)
             must_run(["zstd", "-f", "-d", img + ".zst", "-o", img], "zstd decompress")
         must_run(["qemu-img", "convert", "-f", "raw", "-O", "qcow2",
                   "-o", "preallocation=off", img, qcow], "qemu-img convert")
