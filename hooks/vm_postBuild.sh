@@ -77,6 +77,8 @@ chmod 755 /etc/rc2.d/S99anyvmnet
 
 # The experimental arm64 snapshot ships with files-only name resolution.
 if [ "$(uname -p)" = aarch64 ]; then
+    # Builder and runtime both use this slirp subnet; use its DNS proxy.
+    echo "nameserver 192.168.122.3" > /etc/resolv.conf
     sed -i 's/^hosts:.*/hosts: files dns/; s/^ipnodes:.*/ipnodes: files dns/' /etc/nsswitch.conf
     svcadm refresh dns/client
     svcadm enable dns/client
