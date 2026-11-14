@@ -50,4 +50,8 @@ arm64 guest and cannot launch this image correctly.
 - `uname -a`: `SunOS braich 5.11 arm64-gate-0-g1ba5fbc24a armv8 aarch64 QEMU,virt`.
 - Compared generated r151060 x86 QEMU arguments and profile with commit
   `eb504cd`: identical.
-- Hosted image build and end-to-end action validation are in progress.
+- Installed `rsync` and `build-essential` from the arm64 repository; GCC 14.3.0
+  compiled and ran the native C smoke test. The output was an ELF64 aarch64
+  executable. SCP, rsync and tar round trips passed, including symlinks, executable
+  permissions and filenames with spaces.
+- Full isolated local image build and hosted end-to-end validation are in progress.
