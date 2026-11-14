@@ -7,6 +7,9 @@ Latest: v2.1.4
 
 The image builder for `omnios`
 
+See [experimental aarch64 support](EXPERIMENTAL-ARM64.md) for the braich r151059
+image and its separate build and prerelease workflows.
+
 
 All the supported releases are here:
 
