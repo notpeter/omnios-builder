@@ -33,3 +33,8 @@ time.sleep(15)  # let dhcpagent grab a lease before we try nc
 string("ipadm show-addr %s/v4" % nic)
 enter()
 time.sleep(2)
+
+if is_braich():
+    string("mkdir -p /root/.ssh; chmod 700 /root/.ssh")
+    enter()
+    time.sleep(2)

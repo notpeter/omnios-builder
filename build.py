@@ -1112,7 +1112,7 @@ def build_qemu_args(media_kind=None, media_path=None):
                   "-device", "virtio-blk-device,drive=disk0",
                   "-drive", "file=%s,format=qcow2,if=none,id=disk0,readonly=on" % qcow],
                  "dump OmniOS device tree")
-        if run(["fdtget", dtb, "/aliases", "serial0"]) != 0:
+        if run(["fdtget", dtb, "/aliases", "serial0"]).returncode != 0:
             run(["fdtput", "-c", dtb, "/aliases"])
             must_run(["fdtput", "-t", "s", dtb, "/aliases", "serial0",
                       "/pl011@9000000"], "set serial alias")
@@ -4474,8 +4474,9 @@ def main(argv):
     # boots directly.
     run_hook("beforeBuild")
 
-    startWeb("needOCR")
-    setup("needOCR")
+    if not is_braich():
+        startWeb("needOCR")
+    setup(None if is_braich() else "needOCR")
 
     log("============== host CPU ==============")
     sh("lscpu || cat /proc/cpuinfo || true")
